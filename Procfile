@@ -1,1 +1,1 @@
-web: functions-framework --target=webhook --port=$PORT 
+web: functions-framework --target=webhook --source=webhook.py --port=$PORT 
