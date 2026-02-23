@@ -15,41 +15,27 @@ def checker(request):
     CALL_FROM = os.environ["TWILIO_CALL_NUMBER"]
     now = datetime.now(timezone.utc)
 
-    # 1. Pre-reminders
-    for r in db.reminders.find(
-        {"status": "pending", "pre_remind_at": {"$lte": now, "$ne": None}}):
+    for r in db.reminders.find({"status": "pending", "pre_remind_at": {"$lte": now, "$ne": None}}):
         t = r["remind_at"].strftime("%I:%M %p")
-        twilio.messages.create(
-            from_=WA_FROM, to=r["user_phone"],
-            body="Heads up! '" + r["message"] + "' is at " + t + ".\nReply 'done' if sorted, or 'not now' to push it.")
+        twilio.messages.create(from_=WA_FROM, to=r["user_phone"],
+            body="Heads up! " + r["message"] + " is at " + t + ". Reply done if sorted, or not now to push it.")
         db.reminders.update_one({"_id": r["_id"]}, {"$set": {"status": "pre_notified"}})
 
-    # 2. Main reminders
-    for r in db.reminders.find(
-        {"status": {"$in": ["pending","pre_notified"]}, "remind_at": {"$lte": now}}):
-        twilio.messages.create(
-            from_=WA_FROM, to=r["user_phone"],
-            body="Reminder now: " + r["message"] + "\nReply 'done' - I'll call in " + str(ESCALATION_WAIT_MINS) + " mins if not.")
-        db.reminders.update_one(
-            {"_id": r["_id"]},
-            {"$set": {"status": "notified", "notified_at": now}})
+    for r in db.reminders.find({"status": {"$in": ["pending","pre_notified"]}, "remind_at": {"$lte": now}}):
+        twilio.messages.create(from_=WA_FROM, to=r["user_phone"],
+            body="Reminder now: " + r["message"] + ". Reply done - I will call in 5 mins if not.")
+        db.reminders.update_one({"_id": r["_id"]}, {"$set": {"status": "notified", "notified_at": now}})
 
-    # 3. Escalation
     cutoff = now - timedelta(minutes=ESCALATION_WAIT_MINS)
-    for r in db.reminders.find(
-        {"status": "notified", "notified_at": {"$lte": cutoff}}):
-        hour = now.hour
-        if hour >= 21 or hour < 7:
+    for r in db.reminders.find({"status": "notified", "notified_at": {"$lte": cutoff}}):
+        if now.hour >= 21 or now.hour < 7:
             continue
         phone = r["user_phone"].replace("whatsapp:", "")
-        twilio.messages.create(
-            from_=WA_FROM, to=r["user_phone"],
-            body="No response - calling you now about:\n" + r["message"])
-        twilio.calls.create(
-            to=phone, from_=CALL_FROM,
+        twilio.messages.create(from_=WA_FROM, to=r["user_phone"],
+            body="No response - calling you now about: " + r["message"])
+        twilio.calls.create(to=phone, from_=CALL_FROM,
             twiml="<Response><Say voice='alice'>Hi, your reminder bot here. You need to: " + r["message"] + ". I repeat: " + r["message"] + ". Please reply done on WhatsApp.</Say></Response>")
         db.reminders.update_one({"_id": r["_id"]}, {"$set": {"status": "called"}})
 
     client.close()
     return "OK", 200
-```
