@@ -25,12 +25,22 @@ def parse_reminder(text, user_timezone="UTC"):
     task = task_match.group(1).strip() if task_match else text
     time_text = re.sub(r"remind me", "", text, flags=re.IGNORECASE)
     time_text = re.sub(r"\bto\b.+$", "", time_text, flags=re.IGNORECASE).strip()
-    remind_at = dateparser.parse(
-        time_text,
-        settings={"PREFER_DATES_FROM": "future",
-                  "RETURN_AS_TIMEZONE_AWARE": True,
-                  "TIMEZONE": user_timezone}
-    )
+   
+remind_at = dateparser.parse(
+    time_text,
+    settings={"PREFER_DATES_FROM": "future",
+              "RETURN_AS_TIMEZONE_AWARE": True,
+              "TIMEZONE": user_timezone,
+              "PREFER_DAY_OF_MONTH": "first",
+              "RETURN_TIME_AS_PERIOD": False}
+)
+
+# If no time was specified, default to 9am
+if remind_at and remind_at.hour == 0 and remind_at.minute == 0:
+    remind_at = remind_at.replace(hour=9, minute=0, second=0)
+
+
+
     if not remind_at:
         return task, None, None, event_type
     pre_mins = PRE_REMINDER_DEFAULTS.get(event_type, 10)
