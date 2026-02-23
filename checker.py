@@ -4,8 +4,12 @@ from pymongo import MongoClient
 from twilio.rest import Client
 from datetime import datetime, timezone, timedelta
 
-client  = MongoClient(os.environ["MONGODB_URI"])
-db      = client["reminderbot"]
+
+@functions_framework.http
+def checker(request):
+    client = MongoClient(os.environ["MONGODB_URI"])
+    db = client["reminderbot"]
+    now = datetime.now(timezone.utc)
 twilio  = Client(os.environ["TWILIO_SID"], os.environ["TWILIO_TOKEN"])
 WA_FROM   = "whatsapp:" + os.environ["TWILIO_WHATSAPP_NUMBER"]
 CALL_FROM = os.environ["TWILIO_CALL_NUMBER"]
