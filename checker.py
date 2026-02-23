@@ -4,19 +4,15 @@ from pymongo import MongoClient
 from twilio.rest import Client
 from datetime import datetime, timezone, timedelta
 
+ESCALATION_WAIT_MINS = 5
 
 @functions_framework.http
 def checker(request):
     client = MongoClient(os.environ["MONGODB_URI"])
     db = client["reminderbot"]
-    now = datetime.now(timezone.utc)
-twilio  = Client(os.environ["TWILIO_SID"], os.environ["TWILIO_TOKEN"])
-WA_FROM   = "whatsapp:" + os.environ["TWILIO_WHATSAPP_NUMBER"]
-CALL_FROM = os.environ["TWILIO_CALL_NUMBER"]
-ESCALATION_WAIT_MINS = 5
-
-@functions_framework.http
-def checker(request):
+    twilio = Client(os.environ["TWILIO_SID"], os.environ["TWILIO_TOKEN"])
+    WA_FROM = "whatsapp:" + os.environ["TWILIO_WHATSAPP_NUMBER"]
+    CALL_FROM = os.environ["TWILIO_CALL_NUMBER"]
     now = datetime.now(timezone.utc)
 
     # 1. Pre-reminders
@@ -25,8 +21,7 @@ def checker(request):
         t = r["remind_at"].strftime("%I:%M %p")
         twilio.messages.create(
             from_=WA_FROM, to=r["user_phone"],
-            body=f"Heads up! '{r['message']}' is at {t}.\n"
-                 f"Reply 'done' if sorted, or 'not now' to push it.")
+            body="Heads up! '" + r["message"] + "' is at " + t + ".\nReply 'done' if sorted, or 'not now' to push it.")
         db.reminders.update_one({"_id": r["_id"]}, {"$set": {"status": "pre_notified"}})
 
     # 2. Main reminders
@@ -34,8 +29,7 @@ def checker(request):
         {"status": {"$in": ["pending","pre_notified"]}, "remind_at": {"$lte": now}}):
         twilio.messages.create(
             from_=WA_FROM, to=r["user_phone"],
-            body=f"Reminder now: {r['message']}\n"
-                 f"Reply 'done' - I'll call in {ESCALATION_WAIT_MINS} mins if not.")
+            body="Reminder now: " + r["message"] + "\nReply 'done' - I'll call in " + str(ESCALATION_WAIT_MINS) + " mins if not.")
         db.reminders.update_one(
             {"_id": r["_id"]},
             {"$set": {"status": "notified", "notified_at": now}})
@@ -50,10 +44,12 @@ def checker(request):
         phone = r["user_phone"].replace("whatsapp:", "")
         twilio.messages.create(
             from_=WA_FROM, to=r["user_phone"],
-            body=f"No response - calling you now about:\n{r['message']}")
+            body="No response - calling you now about:\n" + r["message"])
         twilio.calls.create(
             to=phone, from_=CALL_FROM,
-         twiml='<Response><Say voice="alice">Hi, your reminder bot here. You need to: ' + r["message"] + '. I repeat: ' + r["message"] + '. Please reply done on WhatsApp.</Say></Response>')
+            twiml="<Response><Say voice='alice'>Hi, your reminder bot here. You need to: " + r["message"] + ". I repeat: " + r["message"] + ". Please reply done on WhatsApp.</Say></Response>")
         db.reminders.update_one({"_id": r["_id"]}, {"$set": {"status": "called"}})
 
+    client.close()
     return "OK", 200
+```
