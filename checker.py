@@ -49,12 +49,7 @@ def checker(request):
             body=f"No response - calling you now about:\n{r['message']}")
         twilio.calls.create(
             to=phone, from_=CALL_FROM,
-            twiml=f'<Response><Say voice="alice" rate="90%">'
-                  f'Hi, your reminder bot here. '
-                  f'You need to: {r["message"]}. '
-                  f'Repeat: {r["message"]}. '
-                  f'Reply done on WhatsApp when complete.'
-                  f'</Say></Response>')
+         twiml='<Response><Say voice="alice">Hi, your reminder bot here. You need to: ' + r["message"] + '. I repeat: ' + r["message"] + '. Please reply done on WhatsApp.</Say></Response>')
         db.reminders.update_one({"_id": r["_id"]}, {"$set": {"status": "called"}})
 
     return "OK", 200
